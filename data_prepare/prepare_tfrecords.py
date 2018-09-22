@@ -35,6 +35,9 @@ tf.app.flags.DEFINE_string('output_directory', '/data/nx-bdd-20160929/tfrecord_f
 
 tf.app.flags.DEFINE_integer('num_threads', 16, 'Number of threads to preprocess the images.')
 # change truncate_frames when low res
+
+# TODO: rename this flag and the description
+
 tf.app.flags.DEFINE_integer('truncate_frames', 10*3, 'Number of frames to leave in the saved tfrecords')
 tf.app.flags.DEFINE_string('temp_dir_root', '/tmp/', 'the temp dir to hold ffmpeg outputs')
 
@@ -216,6 +219,8 @@ def convert_one(video_path, jobid):
     if not os.path.exists(out_name):
         examples, state = read_one_video(video_path, jobid)
         if state:
+            # TODO: write should be only created for each shard, not each video.
+            
             writer = tf.python_io.TFRecordWriter(out_name)
             for example in examples:
                 writer.write(example.SerializeToString())
@@ -235,6 +240,12 @@ def p_convert(video_path_list, jobid):
 def parallel_run():
     with open(FLAGS.video_index) as f:
         content = f.readlines()
+    
+    content = content[:100]
+    
+    # TODO: shuffle and divide the lines of content into 10 groups. Write each group into one tfrecord file.
+    # TODO: add "10" as another flag specifying how many shards we want to write the data into.
+    
     content = [x.strip() for x in content]
 
     # Create a mechanism for monitoring when all threads are finished.
