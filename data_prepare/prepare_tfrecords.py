@@ -35,7 +35,7 @@ tf.app.flags.DEFINE_string('output_directory', '/data/nx-bdd-20160929/tfrecord_f
 
 tf.app.flags.DEFINE_integer('num_threads', 16, 'Number of threads to preprocess the images.')
 # change truncate_frames when low res
-tf.app.flags.DEFINE_integer('truncate_frames', 36*15, 'Number of frames to leave in the saved tfrecords')
+tf.app.flags.DEFINE_integer('truncate_frames', 10*3, 'Number of frames to leave in the saved tfrecords')
 tf.app.flags.DEFINE_string('temp_dir_root', '/tmp/', 'the temp dir to hold ffmpeg outputs')
 
 tf.app.flags.DEFINE_boolean('low_res', False, 'the data we want to use is low res')
@@ -43,8 +43,8 @@ tf.app.flags.DEFINE_boolean('low_res', False, 'the data we want to use is low re
 pixelh = 216
 pixelw = 384
 # constant for the high resolution
-HEIGHT = 720
-WIDTH = 1280
+HEIGHT = 576
+WIDTH = 1024
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -118,7 +118,7 @@ def read_one_video(video_path, jobid):
     fd, fprefix, cache_images, out_name = parse_path(video_path, jobid)
 
     FNULL = open(os.devnull, 'w')
-    hz_res = 1 if FLAGS.low_res else 15
+    hz_res = 1 if FLAGS.low_res else 3
     ratio = False
 
     # save the speed field
@@ -147,120 +147,58 @@ def read_one_video(video_path, jobid):
         print("the ratio of video is incorrect!", video_path)
         return 0, False
 
-    speeds = speeds[:FLAGS.truncate_frames, :]
+    #speeds = speeds[:FLAGS.truncate_frames, :]
 
 
     image_list=[]
-    if FLAGS.low_res:
-        cmnd = ['ffmpeg', 
-                '-i', video_path, 
-                '-f', 'image2pipe',
-                '-loglevel', 'panic', 
-                '-pix_fmt','rgb24',
-                '-r','1',
-                '-vcodec', 'rawvideo', '-']
-        pipe = subprocess.Popen(cmnd, stdout = subprocess.PIPE, bufsize=10**7)
-        pout, perr = pipe.communicate()
-        image_buff = np.fromstring(pout, dtype='uint8')
-        if image_buff.size < FLAGS.truncate_frames*HEIGHT*WIDTH*3:
-            print(jobid, video_path, image_buff.size, 'Insufficient video size.')
-            return 0, False
-        image_buff = image_buff[0:FLAGS.truncate_frames*HEIGHT*WIDTH*3]
-        image_buff = image_buff.reshape(FLAGS.truncate_frames,HEIGHT,WIDTH,3)
+    # generate the video to images to this dir
+    if os.path.exists(cache_images):
+        shutil.rmtree(cache_images)
+    os.mkdir(cache_images)
 
-        for i in range(FLAGS.truncate_frames):
-            image = image_buff[i,:,:,:]
-            image_left = image[HEIGHT-pixelh:HEIGHT, 0:pixelw]
-            image_right = image[HEIGHT-pixelh:HEIGHT, WIDTH-pixelw:WIDTH]
-            image_left_up = image[0:pixelh, 0:pixelw]
-            image_right_up = image[0:pixelh, WIDTH-pixelw:WIDTH]
+    call(['ffmpeg',
+        '-i', video_path,
+        '-r', '3',
+        '-qscale:v', '10',
+        '-s', '1024*576',
+        '-threads', '4',
+        cache_images + '/%04d.jpg'],
+        stdout=FNULL,
+        stderr=FNULL)
 
-            all_im = [image_left, image_right, image_left_up, image_right_up]
-            all_num = [np.sum(image_left), 
-                       np.sum(image_right), 
-                       np.sum(image_left_up),
-                       np.sum(image_right_up)]
-            rank = np.argsort(all_num)
-            if i % 5 != 0:
-                img = all_im[rank[-1]]
-            else:
-                full = full_im(image, all_num)
+    for subdir, dirs, files in os.walk(cache_images):
+        for f in sorted(files):
+            with open(os.path.join(subdir, f), 'r') as f:
+                image_data = f.read()
+                image_list.append(image_data)
 
-                if full:
-                    # saving of full images are commented out
-                    #output = StringIO.StringIO()
-                    #orig_img = Image.fromarray(image)
-                    #orig_img.save(output, format='JPEG',quality=50)
-                    #orig_contents = output.getvalue()
-                    #output.close()
-                    #image_list_orig.append(orig_contents)
+    
+    '''
+    if len(image_list)<FLAGS.truncate_frames:
+        print('Insufficient video size.')
+        return 0, False
+    image_list = image_list[0:FLAGS.truncate_frames]
+    '''
+    examples = []
+    for i in range(int(len(image_list)/FLAGS.truncate_frames)):
+        low = i * FLAGS.truncate_frames
+        high = (i+1) * FLAGS.truncate_frames
 
-                    img = imresize(image, (pixelh, pixelw, 3), interp='nearest')
-                else:
-                    print(video_path, 'It is not full screen at frames % 5 == 0')
-                    return 0, False
-
-            # RGB to BGR
-            img=img[:,:,[2,1,0]]
-            st=cv2.imencode(".JPEG", img, [cv2.IMWRITE_JPEG_QUALITY, 50])
-            # convert the tuple to the second arg, which is the image content
-            contents=st[1].tostring("C")
-
-            image_list.append(contents)
-    else:
-        # generate the video to images to this dir
-        if os.path.exists(cache_images):
-            shutil.rmtree(cache_images)
-        os.mkdir(cache_images)
-
-        call(['ffmpeg',
-            '-i', video_path,
-            '-r', '15',
-            '-qscale:v', '10',
-            '-s', '640*360',
-            '-threads', '4',
-            cache_images + '/%04d.jpg'],
-            stdout=FNULL,
-            stderr=FNULL)
-
-        for subdir, dirs, files in os.walk(cache_images):
-            for f in sorted(files):
-                with open(os.path.join(subdir, f), 'r') as f:
-                    image_data = f.read()
-                    image_list.append(image_data)
-
-        if len(image_list)<FLAGS.truncate_frames:
-            print('Insufficient video size.')
-            return 0, False
-        image_list = image_list[0:FLAGS.truncate_frames]
-
-
-    if FLAGS.low_res:
         example = tf.train.Example(features=tf.train.Features(feature={
-            'image/height': _int64_feature(pixelh),
-            'image/width': _int64_feature(pixelw),
-            'image/channel': _int64_feature(3),
-            'image/full_height': _int64_feature(HEIGHT),
-            'image/full_width': _int64_feature(WIDTH),
-            'image/class/video_name':_bytes_feature([video_path]),
-            'image/format':_bytes_feature(['JPEG']),
-            'image/encoded': _bytes_feature(image_list),
-            #'image/encoded_orig': _bytes_feature(image_list_orig),
-            'image/speeds': _float_feature(speeds.ravel().tolist()), # ravel l*2 into list
-        }))
-    else:
-        example = tf.train.Example(features=tf.train.Features(feature={
-            'image/height': _int64_feature(360),
-            'image/width': _int64_feature(640),
+            'image/height': _int64_feature(576),
+            'image/width': _int64_feature(1024),
+            'image/start_ms': _int64_feature(int(low/3.0*1000)),
+            'image/end_ms': _int64_feature(int(high/3.0*1000)),
             'image/channel': _int64_feature(3),
             'image/class/video_name':_bytes_feature([video_path]),
             'image/format':_bytes_feature(['JPEG']),
-            'image/encoded': _bytes_feature(image_list),
-            'image/speeds': _float_feature(speeds.ravel().tolist()), # ravel l*2 into list
+            'image/encoded': _bytes_feature(image_list[low:high]),
+            'image/speeds': _float_feature(speeds[low:high].ravel().tolist()), # ravel l*2 into list
         }))
+        examples.append(example)
 
     print(video_path)
-    return example, True
+    return examples, True
 
 def parse_path(video_path, jobid):
     fd, fname = os.path.split(video_path)
@@ -276,10 +214,11 @@ def parse_path(video_path, jobid):
 def convert_one(video_path, jobid):
     fd, fprefix, cache_images, out_name = parse_path(video_path, jobid)
     if not os.path.exists(out_name):
-        example, state = read_one_video(video_path, jobid)
+        examples, state = read_one_video(video_path, jobid)
         if state:
             writer = tf.python_io.TFRecordWriter(out_name)
-            writer.write(example.SerializeToString())
+            for example in examples:
+                writer.write(example.SerializeToString())
             writer.close()   
 
 def p_convert(video_path_list, jobid):

@@ -1,0 +1,11 @@
+user-docker -v /home/yexia/data/bdd-data-v1/videos:/data \
+bdd \
+python data_prepare/filter.py \
+/data/val
+
+cd data_prepare
+user-docker -v /home/yexia/data/bdd-data-v1/videos:/data \
+bdd \
+python prepare_tfrecords.py \
+--video_index=/data/val/video_filtered_38_60.txt \
+--output_directory=/data/tfrecords/validation
