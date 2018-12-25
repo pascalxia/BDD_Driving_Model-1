@@ -35,7 +35,7 @@ tf.app.flags.DEFINE_string('output_directory', '/data/nx-bdd-20160929/tfrecord_f
 
 tf.app.flags.DEFINE_integer('num_threads', 16, 'Number of threads to preprocess the images.')
 # change truncate_frames when low res
-tf.app.flags.DEFINE_integer('truncate_frames', 36*15, 'Number of frames to leave in the saved tfrecords')
+tf.app.flags.DEFINE_integer('truncate_frames', 36*3, 'Number of frames to leave in the saved tfrecords')
 tf.app.flags.DEFINE_string('temp_dir_root', '/tmp/', 'the temp dir to hold ffmpeg outputs')
 
 tf.app.flags.DEFINE_boolean('low_res', False, 'the data we want to use is low res')
@@ -45,6 +45,7 @@ pixelw = 384
 # constant for the high resolution
 HEIGHT = 720
 WIDTH = 1280
+TEMPORAL_FREQUENCY = 3 
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -118,7 +119,7 @@ def read_one_video(video_path, jobid):
     fd, fprefix, cache_images, out_name = parse_path(video_path, jobid)
 
     FNULL = open(os.devnull, 'w')
-    hz_res = 1 if FLAGS.low_res else 15
+    hz_res = 1 if FLAGS.low_res else TEMPORAL_FREQUENCY
     ratio = False
 
     # save the speed field
@@ -215,9 +216,9 @@ def read_one_video(video_path, jobid):
 
         call(['ffmpeg',
             '-i', video_path,
-            '-r', '15',
+            '-r', str(TEMPORAL_FREQUENCY),
             '-qscale:v', '10',
-            '-s', '640*360',
+            '-s', '1280*720',
             '-threads', '4',
             cache_images + '/%04d.jpg'],
             stdout=FNULL,
@@ -250,8 +251,8 @@ def read_one_video(video_path, jobid):
         }))
     else:
         example = tf.train.Example(features=tf.train.Features(feature={
-            'image/height': _int64_feature(360),
-            'image/width': _int64_feature(640),
+            'image/height': _int64_feature(720),
+            'image/width': _int64_feature(1280),
             'image/channel': _int64_feature(3),
             'image/class/video_name':_bytes_feature([video_path]),
             'image/format':_bytes_feature(['JPEG']),
