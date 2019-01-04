@@ -9,8 +9,8 @@ import tensorflow as tf
 FLAGS = tf.app.flags.FLAGS
 
 ############################Set those path before use###################################
-FLAGS.pretrained_model_path = "/data/yang/si/data/pretrained_models/tf.caffenet.bin"
-FLAGS.data_dir = "/data/yang_cache/tfrecord_release/tfrecords"
+FLAGS.pretrained_model_path = "/data/pretrained_models/tf.caffenet.bin"
+FLAGS.data_dir = "/data/tfrecords"
 
 # for privilege training: segmentation image index and labels
 train_city_image_list = '/backup/BDDNexar/Harry_config/Color_train_harry.txt'
@@ -217,7 +217,8 @@ def set_train_stage(isFirstStage, offset):
 def common_final_settings(phase, tag, port, basenet="32s", visEval=False, ptrain=False):
     # resource related
     FLAGS.unique_experiment_name = tag
-    FLAGS.train_dir = "data/" + tag
+    #FLAGS.train_dir = "data/" + tag
+    FLAGS.train_dir = "/data/pretrained_models/" + tag
     FLAGS.tensorboard_port = port
 
     # optimization related
@@ -249,7 +250,7 @@ def common_final_settings(phase, tag, port, basenet="32s", visEval=False, ptrain
     FLAGS.balance_drop_prob = -1.0
 
     FLAGS.decode_downsample_factor = 1
-    FLAGS.temporal_downsample_factor = 5
+    FLAGS.temporal_downsample_factor = 1
     FLAGS.data_provider = "nexar_large_speed"
     # ground truth maker
     FLAGS.speed_limit_as_stop = 2.0
@@ -313,7 +314,7 @@ def common_final_settings(phase, tag, port, basenet="32s", visEval=False, ptrain
     elif phase == "board":
         set_gpu("0")
     elif phase == "test":
-        FLAGS.subset="test"
+        FLAGS.subset="validation"
         FLAGS.eval_method = "car_discrete"
         FLAGS.run_once = True
         FLAGS.city_data = 0
@@ -332,6 +333,12 @@ def common_final_settings(phase, tag, port, basenet="32s", visEval=False, ptrain
 
     if not (phase == "board" or phase == "stat"):
         FLAGS.batch_size = 1 * FLAGS.num_gpus
+        
+    FLAGS.IM_WIDTH=1280
+    FLAGS.IM_HEIGHT=720
+    FLAGS.resize_images="360,640"
+    FLAGS.FRAMES_IN_SEG=108
+    print("\n\n\n\n\nSubsample factor: ", str(FLAGS.subsample_factor), "\n\n\n\n\n\n\n")
 
 
 def common_final_settings_continous(phase, tag, port, basenet="32s", visEval=False, ptrain=False):
