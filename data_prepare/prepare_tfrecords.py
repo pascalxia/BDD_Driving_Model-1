@@ -152,6 +152,7 @@ def read_one_video(video_path, jobid):
 
 
     image_list=[]
+    image_list_low_res = []
     if FLAGS.low_res:
         cmnd = ['ffmpeg', 
                 '-i', video_path, 
@@ -234,6 +235,33 @@ def read_one_video(video_path, jobid):
             print('Insufficient video size.')
             return 0, False
         image_list = image_list[0:FLAGS.truncate_frames]
+        
+        # For low resolution images
+        cache_images_low_res = cache_images + '_low_res'
+        if os.path.exists(cache_images_low_res):
+            shutil.rmtree(cache_images_low_res)
+        os.mkdir(cache_images_low_res)
+
+        call(['ffmpeg',
+            '-i', video_path,
+            '-r', str(TEMPORAL_FREQUENCY),
+            '-qscale:v', '10',
+            '-s', '128*72',
+            '-threads', '4',
+            cache_images_low_res + '/%04d.jpg'],
+            stdout=FNULL,
+            stderr=FNULL)
+
+        for subdir, dirs, files in os.walk(cache_images_low_res):
+            for f in sorted(files):
+                with open(os.path.join(subdir, f), 'r') as f:
+                    image_data = f.read()
+                    image_list_low_res.append(image_data)
+
+        if len(image_list_low_res)<FLAGS.truncate_frames:
+            print('Insufficient video size.')
+            return 0, False
+        image_list_low_res = image_list_low_res[0:FLAGS.truncate_frames]
 
 
     if FLAGS.low_res:
@@ -257,6 +285,7 @@ def read_one_video(video_path, jobid):
             'image/class/video_name':_bytes_feature([video_path]),
             'image/format':_bytes_feature(['JPEG']),
             'image/encoded': _bytes_feature(image_list),
+            'image/low_res': _bytes_feature(image_list_low_res),
             'image/speeds': _float_feature(speeds.ravel().tolist()), # ravel l*2 into list
         }))
 
