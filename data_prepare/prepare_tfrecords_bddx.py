@@ -45,7 +45,7 @@ pixelw = 384
 # constant for the high resolution
 HEIGHT = 720
 WIDTH = 1280
-TEMPORAL_FREQUENCY = 3 
+TEMPORAL_FREQUENCY = 10 
 
 FLAGS = tf.app.flags.FLAGS
 
