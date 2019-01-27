@@ -128,16 +128,9 @@ def read_one_video(video_path, jobid):
     if speeds is None:
         # if speed is none, the error message is printed in other functions
         return 0, False
-
-    if speeds.shape[0] < FLAGS.truncate_frames:
-        print("skipping since speeds are too short!")
-        return 0, False
     
     # filter the too short videos
     duration, ratio = probe_file(video_path)
-    if duration < (FLAGS.truncate_frames+1) * 1.0 / hz_res:
-        print('the video duration is too short')
-        return 0, False
 
     if abs(speeds.shape[0] - duration*hz_res)>2*hz_res:
         # allow one second of displacement
@@ -147,9 +140,6 @@ def read_one_video(video_path, jobid):
     if not ratio:
         print("the ratio of video is incorrect!", video_path)
         return 0, False
-
-    speeds = speeds[:FLAGS.truncate_frames, :]
-
 
     image_list=[]
     image_list_low_res = []
@@ -164,13 +154,9 @@ def read_one_video(video_path, jobid):
         pipe = subprocess.Popen(cmnd, stdout = subprocess.PIPE, bufsize=10**7)
         pout, perr = pipe.communicate()
         image_buff = np.fromstring(pout, dtype='uint8')
-        if image_buff.size < FLAGS.truncate_frames*HEIGHT*WIDTH*3:
-            print(jobid, video_path, image_buff.size, 'Insufficient video size.')
-            return 0, False
-        image_buff = image_buff[0:FLAGS.truncate_frames*HEIGHT*WIDTH*3]
-        image_buff = image_buff.reshape(FLAGS.truncate_frames,HEIGHT,WIDTH,3)
+        image_buff = image_buff.reshape(-1,HEIGHT,WIDTH,3)
 
-        for i in range(FLAGS.truncate_frames):
+        for i in range(len(image_buff)):
             image = image_buff[i,:,:,:]
             image_left = image[HEIGHT-pixelh:HEIGHT, 0:pixelw]
             image_right = image[HEIGHT-pixelh:HEIGHT, WIDTH-pixelw:WIDTH]
@@ -230,11 +216,6 @@ def read_one_video(video_path, jobid):
                 with open(os.path.join(subdir, f), 'r') as f:
                     image_data = f.read()
                     image_list.append(image_data)
-
-        if len(image_list)<FLAGS.truncate_frames:
-            print('Insufficient video size.')
-            return 0, False
-        image_list = image_list[0:FLAGS.truncate_frames]
         
         # For low resolution images
         cache_images_low_res = cache_images + '_low_res'
@@ -257,11 +238,6 @@ def read_one_video(video_path, jobid):
                 with open(os.path.join(subdir, f), 'r') as f:
                     image_data = f.read()
                     image_list_low_res.append(image_data)
-
-        if len(image_list_low_res)<FLAGS.truncate_frames:
-            print('Insufficient video size.')
-            return 0, False
-        image_list_low_res = image_list_low_res[0:FLAGS.truncate_frames]
 
 
     if FLAGS.low_res:
