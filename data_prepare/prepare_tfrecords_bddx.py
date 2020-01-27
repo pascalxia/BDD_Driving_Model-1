@@ -39,6 +39,11 @@ tf.app.flags.DEFINE_integer('truncate_frames', 36*3, 'Number of frames to leave 
 tf.app.flags.DEFINE_string('temp_dir_root', '/tmp/', 'the temp dir to hold ffmpeg outputs')
 
 tf.app.flags.DEFINE_boolean('low_res', False, 'the data we want to use is low res')
+
+tf.app.flags.DEFINE_string('gazemap_directory', None, 'The directory that contains predicted gaze maps')
+
+
+
 # constant for the low res resolution
 pixelh = 216
 pixelw = 384
@@ -239,7 +244,21 @@ def read_one_video(video_path, jobid):
                     image_data = f.read()
                     image_list_low_res.append(image_data)
 
+    
+    video_name = video_path.split('/')[-1].split('.')[0]
+    # Add predicted gaze maps
+    if FLAGS.gazemap_directory is not None:
+        gazemap_directory = FLAGS.gazemap_directory
+        gazemap_list = []
+        for i in range(len(image_list)):
+            try:
+                with open(os.path.join(gazemap_directory, video_name+'_'+str(i*100).zfill(5)+'.jpg'), 'r') as f:
+                    image_data = f.read()
+                    gazemap_list.append(image_data)
+            except IOError:
+                print("Predicted gaze map for "+ video_name+'_'+str(i*100).zfill(5)+'.jpg' +"does not exist. Skip.")
 
+    
     if FLAGS.low_res:
         example = tf.train.Example(features=tf.train.Features(feature={
             'image/height': _int64_feature(pixelh),
@@ -254,7 +273,7 @@ def read_one_video(video_path, jobid):
             'image/speeds': _float_feature(speeds.ravel().tolist()), # ravel l*2 into list
         }))
     else:
-        example = tf.train.Example(features=tf.train.Features(feature={
+        example_features = {
             'image/height': _int64_feature(720),
             'image/width': _int64_feature(1280),
             'image/channel': _int64_feature(3),
@@ -263,9 +282,12 @@ def read_one_video(video_path, jobid):
             'image/encoded': _bytes_feature(image_list),
             'image/low_res': _bytes_feature(image_list_low_res),
             'image/speeds': _float_feature(speeds.ravel().tolist()), # ravel l*2 into list
-        }))
+        }
+        if FLAGS.gazemap_directory is not None:
+            example_features['image/gaze_maps'] = _bytes_feature(gazemap_list)
+        example = tf.train.Example(features=tf.train.Features(feature=example_features))
 
-    print(video_path)
+    print(video_path.split('/')[-1])
     return example, True
 
 def parse_path(video_path, jobid):
