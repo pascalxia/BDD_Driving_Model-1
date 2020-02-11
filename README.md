@@ -1,3 +1,47 @@
+# Forked from Berkeley DeepDrive (BDD) Driving Model for Periphery-Fovea Driving Model
+## Project Introduction:
+This project is forked from `gy20073/BDD_Driving_Model` to prepare [Berkeley DeepDrive Video Dataset](https://bdd-data.berkeley.edu/) (BDD-V) for the paper [Periphery-Fovea Multi-Resolution Driving Model Guided by Human Attention](https://arxiv.org/abs/1903.09950).
+
+## Downloading the Dataset
+To download the BDD-V dataset, please visit https://bdd-data.berkeley.edu/, click on "Download Dataset" to get to the user portal, and then follow the instructions over there.
+
+## Using the Code
+### Installation
+The easiest way to set up the environment for using our code is to use the Docker image prepared for our code, `blindgrandpa/bdd`. You can find it on Docker Hub. The Dockerfile of this Docker image is at `./docker_images/bdd/` in this repo. You will need to have nvidia-docker installed for using this Docker image. Alternatively, you can also follow the instructions of the original project `gy20073/BDD_Driving_Model` (attached below) to set up the environment for this project.
+
+### Preparing the data for Periphery-Fovea Driving Model
+1. Download and unzip the dataset into `./data/` in this repo. There should be directories like `./data/videos/train/videos` and `./data/videos/val/info`.
+
+2. Run the following command to filter out invalid videos (e.g., videos that are too short or too long). P.S., the test set of BDD-V is not released. You can copy the data in the validation set into the test set for testing our code or you can prepare your data in a similar way for using as the test set.
+```bash
+python data_prepare/filter.py data/videos/train
+python data_prepare/filter.py data/videos/val
+python data_prepare/filter.py data/videos/test
+```
+
+3. Run the following command to create TFRecords files of the data. You can adjust `--num_threads` to control how many parallel threads you would like to use.
+```bash
+python data_prepare/prepare_tfrecords_bddx.py \
+--video_index=data/videos/train/video_filtered_38_60.txt \
+--output_directory=data/tfrecords/training/ \
+--num_threads=10
+
+python data_prepare/prepare_tfrecords_bddx.py \
+--video_index=data/videos/val/video_filtered_38_60.txt \
+--output_directory=data/tfrecords/validation/ \
+--num_threads=10
+
+python data_prepare/prepare_tfrecords_bddx.py \
+--video_index=data/videos/test/video_filtered_38_60.txt \
+--output_directory=data/tfrecords/test/ \
+--num_threads=10
+```
+
+4. Move or copy the folder `data/tfrecords` to the [repo](https://github.com/pascalxia/periphery_fovea_driving) of Periphery-Fovea Driving Model. Please keep the same relative path, i.e., `data/tfrecords`.
+
+
+
+
 # Berkeley DeepDrive (BDD) Driving Model
 ## Project Introduction:
 
